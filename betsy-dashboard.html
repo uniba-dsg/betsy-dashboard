@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>betsy dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.1/css/bootstrap.min.css">
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.1/css/bootstrap-theme.min.css">
+
+    <script src="http://code.jquery.com/jquery.js"></script>
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.1/js/bootstrap.min.js"></script>
+
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="https://rawgithub.com/olimcc/gviz-pivottable/master/pivot2.js"></script>
+
+    <script type="text/javascript" src="results.js"></script>
+
+    <script type="text/javascript">
+var results = [];
+
+function loadAndParseCsvFile(filePath) {
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    content = e.target.result;
+    updateResults(content);
+  }
+  reader.readAsText(filePath.files[0]);
+}
+
+function updateResults(csvContents) {
+  var rows = csvContents.trim().split("\n");
+  for(var i = 0; i < rows.length; i++) {
+    rows[i] = rows[i].split(";");
+
+    // adjust type from string to integer
+    rows[i][3] = parseInt(rows[i][3]);
+    rows[i][4] = parseInt(rows[i][4]);
+    rows[i][5] = parseInt(rows[i][5]);
+  }
+  results = rows;
+
+  drawTable();
+}
+
+// Load the Visualization API and the piechart package.
+google.load('visualization', '1.0', {packages:['table', 'corechart', 'controls']});
+
+// Set a callback to run when the Google Visualization API is loaded.
+google.setOnLoadCallback(drawTable);
+
+function create_ranking_data(data) {
+  return google.visualization.data.group(
+    data, [1],
+    [
+      {'column': 3, 'aggregation': google.visualization.data.sum, 'type': 'number'},
+      {'column': 0, 'aggregation': google.visualization.data.count, 'type': 'number'}
+    ]
+  );
+}
+
+/**
+ * Draws the ranking of the engines as a table.
+ */
+function draw_ranking(data) {
+  var table = new google.visualization.Table(document.getElementById('grouped_table'));
+  table.draw(data, {showRowNumber : true, allowHtml: true});
+
+  return table;
+}
+
+function create_raw_data() {
+  var formatter = new google.visualization.ColorFormat();
+  formatter.addRange(0, 1, 'black', 'red');
+  formatter.addRange(1, 2, 'black', 'green');
+
+  // Create and populate the data table.
+  var data = new google.visualization.DataTable();
+  data.addColumn("string", "Test");
+  data.addColumn("string", "Engine");
+  data.addColumn("string", "Group");
+  data.addColumn("number", "Successful?");
+  data.addColumn("number", "# of failed tests");
+  data.addColumn("number", "# of total tests");
+  data.addColumn("string", "success");
+
+  data.addRows(results);
+
+  formatter.format(data, 3);
+
+  return data;
+}
+
+function create_test_engine_data(raw_data_table) {
+  var formatter = new google.visualization.ColorFormat();
+  formatter.addRange(0, 1, 'black', 'red');
+  formatter.addRange(1, 2, 'black', 'green');
+
+  // A simple usage example
+  var test_engine_pivot = new gvizpivot.PivotAgg(
+    raw_data_table,
+    {pivotColumnIndex: {
+       column: 1,
+       sortDesc: true,
+       aggregator: google.visualization.data.sum // how to aggregate the pivoted values,
+     },
+     pivotKeyIndexes: [{column: 2},{column: 0}],
+     pivotValueIndex: {column: 3}
+    });
+  var test_engine_data_table = test_engine_pivot.getDataTable();
+
+  for(var i = 2; i < test_engine_data_table.getNumberOfColumns(); i++){
+    formatter.format(test_engine_data_table, i);
+  }
+
+  return test_engine_data_table;
+}
+
+function draw_test_engine(data) {
+  var table = new google.visualization.Table(document.getElementById('test_engine_table'));
+  table.draw(data, {showRowNumber : true, allowHtml: true});
+
+  return table;
+}
+
+function create_group_engine_data(data) {
+  var group_engine_pivot = new gvizpivot.PivotAgg(
+    data,
+    {pivotColumnIndex: {
+       column: 1,
+       sortDesc: true,
+       aggregator: google.visualization.data.sum // how to aggregate the pivoted values,
+     },
+     pivotKeyIndexes: [{column: 2}],
+     pivotValueIndex: {column: 3}
+    });
+
+  return group_engine_pivot.getDataTable();
+}
+
+function draw_group_engine(data) {
+  var table = new google.visualization.Table(document.getElementById('group_engine_table'));
+  table.draw(data, {showRowNumber : true, allowHtml: true});
+
+  return table;
+}
+
+function draw_raw(data){
+  return new google.visualization.ChartWrapper({
+    'chartType': 'Table',
+    'containerId': 'table',
+    'options': { allowHtml: true, showRowNumber: true }
+  });
+}
+
+function create_engine_group_data(data) {
+  return new gvizpivot.PivotAgg(
+    data,
+    {pivotColumnIndex: {
+       column: 2,
+       sortDesc: true,
+       aggregator: google.visualization.data.sum // how to aggregate the pivoted values,
+     },
+     pivotKeyIndexes: [{column: 1}],
+     pivotValueIndex: {column: 3}
+    }).getDataTable();
+}
+
+function draw_engine_group(data) {
+  var table = new google.visualization.Table(document.getElementById('engine_group_table'));
+  table.draw(data, {showRowNumber : true, allowHtml: true});
+  return table;
+}
+
+function draw_engine_group_bar_chart(data) {
+  var bar_chart = new google.visualization.BarChart(document.getElementById('engine_group_bar_chart'));
+  bar_chart.draw(data, {
+    width: 800,
+    height: 600,
+    hAxis: {title: "Successful tests"}
+  });
+
+  return bar_chart;
+}
+
+
+function drawTable() {
+  // Create and populate the data table.
+  var raw_data = create_raw_data();
+  var raw_table = draw_raw(raw_data);
+
+  var group_filter_control = create_group_filter_control();
+  var test_filter_control = create_test_filter_control();
+  var engine_filter_control = create_engine_filter_control();
+  var test_search_filter_control = create_test_search_filter_control();
+
+  var dashboard = new google.visualization.Dashboard(document.getElementById('dashboard'));
+  // bind group -> test
+  dashboard.bind(group_filter_control, test_filter_control);
+  // bind test and test search -> table
+  dashboard.bind([test_filter_control, test_search_filter_control, engine_filter_control], raw_table);
+  // bind engine -> table
+
+  google.visualization.events.addListener(dashboard, 'ready', function() {
+    // update dependent charts
+    var current_raw_data = raw_table.getDataTable();
+
+    var engine_group_data = create_engine_group_data(current_raw_data);
+    var engine_group_table = draw_engine_group(engine_group_data);
+    var engine_group_bar_chart = draw_engine_group_bar_chart(engine_group_data);
+
+    var ranking_data = create_ranking_data(current_raw_data);
+    var ranking_table = draw_ranking(ranking_data);
+
+    var test_engine_data = create_test_engine_data(current_raw_data);
+    // set width of engine columns
+    for(var i = 2; i < test_engine_data.getNumberOfColumns(); i++){
+      test_engine_data.setProperty(0, i, 'style', test_engine_data.getProperty(0, i, 'style') + 'width:100px;');
+    }
+
+    var test_engine_table = draw_test_engine(test_engine_data);
+
+    var group_engine_data = create_group_engine_data(current_raw_data);
+    var group_engine_table = draw_group_engine(group_engine_data);
+  });
+
+  dashboard.draw(raw_data);
+}
+
+function create_group_filter_control() {
+  return new google.visualization.ControlWrapper({
+    'controlType': 'CategoryFilter',
+    'containerId': 'group_control',
+    'options': {
+      'filterColumnLabel': 'Group',
+      'ui': {
+      'labelStacking': 'vertical',
+        'allowTyping': false,
+        'allowMultiple': true
+      }
+    }
+  });
+}
+
+function create_test_filter_control() {
+  return new google.visualization.ControlWrapper({
+    'controlType': 'CategoryFilter',
+    'containerId': 'test_control',
+    'options': {
+      'filterColumnLabel': 'Test',
+      'ui': {
+      'labelStacking': 'vertical',
+        'allowTyping': false,
+        'allowMultiple': false
+      }
+    }
+  });
+}
+
+function create_engine_filter_control() {
+  return new google.visualization.ControlWrapper({
+    'controlType': 'CategoryFilter',
+    'containerId': 'engine_control',
+    'options': {
+      'filterColumnLabel': 'Engine',
+      'ui': {
+      'labelStacking': 'vertical',
+        'allowTyping': false,
+        'allowMultiple': true
+      }
+    }
+  });
+}
+
+function create_test_search_filter_control() {
+  return new google.visualization.ControlWrapper({
+    'controlType': 'StringFilter',
+    'containerId': 'test_filter',
+    'options': {
+      'filterColumnLabel': 'Test',
+      matchType: 'any'
+    }
+  });
+}
+    </script>
+
+    <style>
+      .google-visualization-controls-categoryfilter { display: inline-block;}
+      .google-visualization-controls-stringfilter { display: inline-block;}
+    </style>
+  </head>
+
+  <body>
+    <div>
+      <span>Select results.csv file</span><input type="file" onchange="loadAndParseCsvFile(this)" />
+    </div>
+
+  	<div>
+	  	<ul class="nav nav-tabs">
+	  		<li><a href="#dashboard" data-toggle="tab">Dashboard</a></li>
+	  		<li><a href="#rawdata" data-toggle="tab">Raw data</a></li>
+	  		<li><a href="#ranking" data-toggle="tab">Ranking</a></li>
+	  		<li><a href="#group_engine" data-toggle="tab">Group x Engine</a></li>
+	  		<li><a href="#engine_group" data-toggle="tab">Engine x Group</a></li>
+	  	</ul>
+
+	  	<div class="tab-content">
+
+	  		<div id="dashboard" class="tab-pane active">
+	  			<div id="controls">
+	  				<span id="group_control"></span>
+	  				<span id="test_control"></span>
+	  				<span id="engine_control"></span>
+	  				<span id="test_filter"></span>
+	  			</div>
+	  			<div id="test_engine_table"></div>
+	  		</div>
+
+        <div id="rawdata" class="tab-pane">
+          <div id="table"></div>
+        </div>
+
+        <div id="ranking" class="tab-pane">
+          <div id="grouped_table" ></div>
+        </div>
+
+        <div id="group_engine" class="tab-pane">
+          <div id="group_engine_table"></div>
+        </div>
+
+        <div id="engine_group" class="tab-pane">
+          <div id="engine_group_table"></div>
+          <div id="engine_group_bar_chart"></div>
+        </div>
+
+	  	</div>
+
+  	</div>
+  </body>
+</html>
